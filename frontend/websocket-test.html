@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>اختبار WebSocket - WhatsApp</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .connected { background-color: #d4edda; color: #155724; }
+        .disconnected { background-color: #f8d7da; color: #721c24; }
+        .connecting { background-color: #fff3cd; color: #856404; }
+        
+        .controls {
+            margin: 20px 0;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #6c757d; cursor: not-allowed; }
+        
+        .logs {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            margin-top: 20px;
+        }
+        .log-entry {
+            margin: 2px 0;
+            padding: 2px 5px;
+        }
+        .log-info { color: #007bff; }
+        .log-success { color: #28a745; }
+        .log-warning { color: #ffc107; }
+        .log-error { color: #dc3545; }
+        
+        input[type="text"] {
+            width: 300px;
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔌 اختبار WebSocket - نظام WhatsApp</h1>
+        
+        <div id="status" class="status disconnected">
+            غير متصل
+        </div>
+        
+        <div class="controls">
+            <h3>إعدادات الاتصال:</h3>
+            <input type="text" id="tokenInput" placeholder="أدخل JWT Token هنا" style="width: 500px;">
+            <br>
+            <button onclick="connect()">اتصال</button>
+            <button onclick="disconnect()">قطع الاتصال</button>
+            <button onclick="clearLogs()">مسح السجلات</button>
+        </div>
+        
+        <div class="controls">
+            <h3>اختبار الأحداث:</h3>
+            <input type="text" id="sessionInput" placeholder="اسم الجلسة (مثل: default)" value="default">
+            <br>
+            <button onclick="subscribeToSession()">الاشتراك في جلسة</button>
+            <button onclick="unsubscribeFromSession()">إلغاء الاشتراك</button>
+            <button onclick="getSessionsStatus()">حالة الجلسات</button>
+            <button onclick="sendPing()">إرسال Ping</button>
+        </div>
+        
+        <div class="logs" id="logs">
+            <div class="log-entry log-info">جاهز للاتصال...</div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        let socket = null;
+        let isConnected = false;
+
+        function updateStatus(status, className) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = status;
+            statusEl.className = `status ${className}`;
+        }
+
+        function log(message, type = 'info') {
+            const logsEl = document.getElementById('logs');
+            const timestamp = new Date().toLocaleTimeString('ar-EG');
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry log-${type}`;
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            logsEl.appendChild(logEntry);
+            logsEl.scrollTop = logsEl.scrollHeight;
+        }
+
+        function connect() {
+            const token = document.getElementById('tokenInput').value.trim();
+            if (!token) {
+                log('يرجى إدخال JWT Token', 'error');
+                return;
+            }
+
+            if (socket) {
+                socket.disconnect();
+            }
+
+            updateStatus('جاري الاتصال...', 'connecting');
+            log('محاولة الاتصال بـ WebSocket...', 'info');
+
+            socket = io('http://localhost:3000', {
+                auth: {
+                    token: token
+                },
+                transports: ['websocket', 'polling']
+            });
+
+            // أحداث الاتصال
+            socket.on('connect', () => {
+                isConnected = true;
+                updateStatus('متصل ✅', 'connected');
+                log('تم الاتصال بنجاح!', 'success');
+            });
+
+            socket.on('disconnect', (reason) => {
+                isConnected = false;
+                updateStatus('غير متصل ❌', 'disconnected');
+                log(`تم قطع الاتصال: ${reason}`, 'warning');
+            });
+
+            socket.on('connect_error', (error) => {
+                updateStatus('خطأ في الاتصال ❌', 'disconnected');
+                log(`خطأ في الاتصال: ${error.message}`, 'error');
+            });
+
+            // أحداث حالة الاتصال
+            socket.on('connection_status', (data) => {
+                log(`حالة الاتصال: ${JSON.stringify(data)}`, 'info');
+            });
+
+            // أحداث WhatsApp
+            socket.on('session_status_update', (data) => {
+                log(`تحديث حالة الجلسة: ${data.sessionId} -> ${data.status}`, 'success');
+            });
+
+            socket.on('qr_code_update', (data) => {
+                log(`QR Code جديد للجلسة: ${data.sessionId}`, 'success');
+            });
+
+            socket.on('new_message', (data) => {
+                log(`رسالة جديدة في ${data.sessionId}: ${data.message.type}`, 'success');
+            });
+
+            socket.on('whatsapp_session_update', (data) => {
+                log(`تحديث عام للجلسة: ${JSON.stringify(data)}`, 'info');
+            });
+
+            socket.on('whatsapp_qr_update', (data) => {
+                log(`تحديث QR عام: ${data.sessionId}`, 'info');
+            });
+
+            socket.on('whatsapp_message', (data) => {
+                log(`رسالة عامة: ${data.sessionId}`, 'info');
+            });
+
+            // أحداث الاشتراك
+            socket.on('session_subscribed', (data) => {
+                log(`تم الاشتراك في الجلسة: ${data.sessionId}`, 'success');
+            });
+
+            socket.on('session_unsubscribed', (data) => {
+                log(`تم إلغاء الاشتراك من الجلسة: ${data.sessionId}`, 'warning');
+            });
+
+            socket.on('sessions_status', (data) => {
+                log(`حالة الجلسات: ${JSON.stringify(data)}`, 'info');
+            });
+
+            // Ping/Pong
+            socket.on('pong', (data) => {
+                log(`Pong مستلم: ${data.timestamp}`, 'success');
+            });
+
+            // أخطاء
+            socket.on('error', (error) => {
+                log(`خطأ: ${error.message}`, 'error');
+            });
+        }
+
+        function disconnect() {
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+            }
+            updateStatus('غير متصل', 'disconnected');
+            log('تم قطع الاتصال يدوياً', 'warning');
+        }
+
+        function subscribeToSession() {
+            if (!isConnected) {
+                log('يجب الاتصال أولاً', 'error');
+                return;
+            }
+            const sessionName = document.getElementById('sessionInput').value.trim() || 'default';
+            socket.emit('subscribe_session', { sessionName });
+            log(`طلب الاشتراك في الجلسة: ${sessionName}`, 'info');
+        }
+
+        function unsubscribeFromSession() {
+            if (!isConnected) {
+                log('يجب الاتصال أولاً', 'error');
+                return;
+            }
+            const sessionName = document.getElementById('sessionInput').value.trim() || 'default';
+            socket.emit('unsubscribe_session', { sessionName });
+            log(`طلب إلغاء الاشتراك من الجلسة: ${sessionName}`, 'info');
+        }
+
+        function getSessionsStatus() {
+            if (!isConnected) {
+                log('يجب الاتصال أولاً', 'error');
+                return;
+            }
+            socket.emit('get_sessions_status');
+            log('طلب حالة الجلسات', 'info');
+        }
+
+        function sendPing() {
+            if (!isConnected) {
+                log('يجب الاتصال أولاً', 'error');
+                return;
+            }
+            socket.emit('ping');
+            log('تم إرسال Ping', 'info');
+        }
+
+        function clearLogs() {
+            document.getElementById('logs').innerHTML = '<div class="log-entry log-info">تم مسح السجلات</div>';
+        }
+
+        // تحديث حالة الأزرار
+        setInterval(() => {
+            const buttons = document.querySelectorAll('button');
+            buttons.forEach(btn => {
+                if (btn.onclick && btn.onclick.toString().includes('connect()')) {
+                    btn.disabled = isConnected;
+                } else if (btn.onclick && (
+                    btn.onclick.toString().includes('disconnect()') ||
+                    btn.onclick.toString().includes('subscribe') ||
+                    btn.onclick.toString().includes('getSessionsStatus') ||
+                    btn.onclick.toString().includes('sendPing')
+                )) {
+                    btn.disabled = !isConnected;
+                }
+            });
+        }, 1000);
+    </script>
+</body>
+</html>

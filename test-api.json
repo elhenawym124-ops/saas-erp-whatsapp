@@ -1,0 +1,28 @@
+{
+  "email": "admin@example.com",
+  "password": "Admin@1234",
+  "phone": "+201234567890",
+  "organizationData": {
+    "name": "شركتي التجريبية",
+    "domain": "my-test-company",
+    "industry": "technology",
+    "size": "10-50",
+    "contactInfo": {
+      "email": "info@mycompany.com",
+      "phone": "+201234567890",
+      "address": "القاهرة، مصر"
+    }
+  },
+  "personalInfo": {
+    "firstName": "أحمد",
+    "lastName": "محمد",
+    "dateOfBirth": "1990-01-01"
+  },
+  "workInfo": {
+    "employeeId": "EMP001",
+    "department": "IT",
+    "position": "مدير تقني",
+    "hireDate": "2024-01-01"
+  }
+}
+
