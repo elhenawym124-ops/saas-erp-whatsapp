@@ -1201,11 +1201,9 @@ export default function WhatsAppMessagesPage() {
   // ✅ Filter messages based on search and filters (with debounced search)
   const filteredMessages = useMemo(() => {
     return messages.filter((msg) => {
-      // Search filter (using debounced query)
+      // Search filter (using debounced query) - Fixed to use getMessageContent
       const matchesSearch = debouncedSearchQuery === '' || (() => {
-        const content = typeof msg.content === 'string'
-          ? msg.content
-          : msg.content?.text || '';
+        const content = getMessageContent(msg);
         return content.toLowerCase().includes(debouncedSearchQuery.toLowerCase());
       })();
 

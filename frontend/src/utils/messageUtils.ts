@@ -121,11 +121,11 @@ export const getMessageContent = (message: any): string => {
       const parsed = JSON.parse(message.content);
 
       // Handle different content types
-      if (parsed.text && typeof parsed.text === 'string') {
+      if (parsed.text && typeof parsed.text === 'string' && parsed.text.trim()) {
         return parsed.text.trim();
       }
 
-      if (parsed.caption && typeof parsed.caption === 'string') {
+      if (parsed.caption && typeof parsed.caption === 'string' && parsed.caption.trim()) {
         return parsed.caption.trim();
       }
 
@@ -184,18 +184,70 @@ export const getMessageContent = (message: any): string => {
 
   // Handle object content
   if (typeof message.content === 'object' && message.content !== null) {
-    if (message.content.text && typeof message.content.text === 'string') {
+    if (message.content.text && typeof message.content.text === 'string' && message.content.text.trim()) {
       return message.content.text.trim();
     }
-    if (message.content.caption && typeof message.content.caption === 'string') {
+    if (message.content.caption && typeof message.content.caption === 'string' && message.content.caption.trim()) {
       return message.content.caption.trim();
     }
+
+    // Handle media objects without text/caption
+    if (message.content.mimetype) {
+      if (message.content.mimetype.startsWith('image/')) {
+        return '📷 صورة';
+      }
+      if (message.content.mimetype.startsWith('video/')) {
+        return '🎥 فيديو';
+      }
+      if (message.content.mimetype.startsWith('audio/')) {
+        return '🎵 صوت';
+      }
+      if (message.content.mimetype === 'application/pdf') {
+        return '📄 ملف PDF';
+      }
+      if (message.content.mimetype.startsWith('application/')) {
+        return '📎 ملف';
+      }
+      return '📎 ملف';
+    }
+
     return '';
   }
 
   // Fallback to body field
-  if (message.body && typeof message.body === 'string') {
+  if (message.body && typeof message.body === 'string' && message.body.trim()) {
     return message.body.trim();
+  }
+
+  // Additional fallbacks for different message structures
+  if (message.text && typeof message.text === 'string' && message.text.trim()) {
+    return message.text.trim();
+  }
+
+  if (message.message && typeof message.message === 'string' && message.message.trim()) {
+    return message.message.trim();
+  }
+
+  // If message has messageType but no content, show type-specific placeholder
+  if (message.messageType) {
+    switch (message.messageType) {
+      case 'image':
+        return '📷 صورة';
+      case 'video':
+        return '🎥 فيديو';
+      case 'audio':
+        return '🎵 صوت';
+      case 'document':
+        return '📄 مستند';
+      case 'location':
+        return '📍 موقع';
+      case 'contact':
+        return '👤 جهة اتصال';
+      case 'sticker':
+        return '😀 ملصق';
+      default:
+        return '';
+    }
   }
 
   return '';
